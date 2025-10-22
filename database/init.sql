@@ -124,3 +124,4 @@ CREATE INDEX idx_espacios_tipo ON espacios(tipo);
 CREATE INDEX idx_incidencias_estado ON incidencias(estado);
 CREATE INDEX idx_auditoria_fecha ON auditoria(fecha_accion);
 
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255);
