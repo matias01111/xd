@@ -178,6 +178,88 @@ async def get_incident_report(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/reports/auditoria")
+async def get_audit_history(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    accion: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Obtener historial de auditoría con filtros"""
+    try:
+        query = db.query(Auditoria).join(Usuario)
+        
+        # Aplicar filtros
+        if fecha_inicio:
+            fecha_inicio_dt = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+            query = query.filter(Auditoria.fecha_accion >= fecha_inicio_dt)
+        
+        if fecha_fin:
+            fecha_fin_dt = datetime.strptime(fecha_fin, "%Y-%m-%d")
+            query = query.filter(Auditoria.fecha_accion <= fecha_fin_dt)
+        
+        if accion:
+            query = query.filter(Auditoria.accion == accion)
+        
+        auditorias = query.order_by(Auditoria.fecha_accion.desc()).limit(limit).all()
+        
+        return [
+            {
+                "id": audit.id_auditoria,
+                "accion": audit.accion,
+                "tabla_afectada": audit.tabla_afectada,
+                "registro_id": audit.registro_id,
+                "usuario": audit.usuario.nombre,
+                "usuario_email": audit.usuario.correo_institucional,
+                "detalles": audit.detalles,
+                "fecha": audit.fecha_accion.strftime("%Y-%m-%d %H:%M:%S")
+            }
+            for audit in auditorias
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/reports/estadisticas")
+async def get_statistics(db: Session = Depends(get_db)):
+    """Obtener estadísticas generales del sistema"""
+    try:
+        # Totales generales
+        total_usuarios = db.query(Usuario).filter(Usuario.activo == True).count()
+        total_espacios = db.query(Espacio).filter(Espacio.activo == True).count()
+        total_reservas = db.query(Reserva).count()
+        total_incidencias = db.query(Incidencia).count()
+        
+        # Reservas por estado
+        reservas_aprobadas = db.query(Reserva).filter(Reserva.estado == 'aprobada').count()
+        reservas_pendientes = db.query(Reserva).filter(Reserva.estado == 'pendiente').count()
+        reservas_rechazadas = db.query(Reserva).filter(Reserva.estado == 'rechazada').count()
+        
+        # Tasas de aprobación/rechazo
+        total_procesadas = reservas_aprobadas + reservas_rechazadas
+        tasa_aprobacion = (reservas_aprobadas / total_procesadas * 100) if total_procesadas > 0 else 0
+        tasa_rechazo = (reservas_rechazadas / total_procesadas * 100) if total_procesadas > 0 else 0
+        
+        # Incidencias abiertas
+        incidencias_abiertas = db.query(Incidencia).filter(
+            Incidencia.estado.in_(['abierta', 'en_progreso'])
+        ).count()
+        
+        return {
+            "usuarios_activos": total_usuarios,
+            "espacios_activos": total_espacios,
+            "total_reservas": total_reservas,
+            "reservas_aprobadas": reservas_aprobadas,
+            "reservas_pendientes": reservas_pendientes,
+            "reservas_rechazadas": reservas_rechazadas,
+            "tasa_aprobacion": round(tasa_aprobacion, 2),
+            "tasa_rechazo": round(tasa_rechazo, 2),
+            "total_incidencias": total_incidencias,
+            "incidencias_abiertas": incidencias_abiertas
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Endpoint para el protocolo SOA
 @app.post("/soa/message")
 async def handle_soa_message(message: str):

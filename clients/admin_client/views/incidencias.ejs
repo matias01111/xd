@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> - Panel Admin UDP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+        }
+        .nav-link {
+            color: #495057;
+        }
+        .nav-link:hover {
+            background-color: #e9ecef;
+        }
+        .nav-link.active {
+            background-color: #dc3545 !important;
+            color: white !important;
+        }
+        .btn-primary, .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        .btn-primary:hover, .btn-danger:hover {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+        .incident-card {
+            border-left: 4px solid;
+        }
+        .incident-card.abierta { border-left-color: #dc3545; }
+        .incident-card.en_progreso { border-left-color: #ffc107; }
+        .incident-card.resuelta { border-left-color: #28a745; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h4 class="text-danger">
+                            <i class="fas fa-shield-alt"></i> Admin UDP
+                        </h4>
+                    </div>
+                    
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/dashboard">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/reservas">
+                                <i class="fas fa-calendar-check"></i> Reservas
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/incidencias">
+                                <i class="fas fa-exclamation-triangle"></i> Incidencias
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <hr>
+                    
+                    <div class="text-center">
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user-shield"></i> <%= user.nombre %>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="/logout">
+                                    <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                                </a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2"><i class="fas fa-exclamation-triangle"></i> <%= title %></h1>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#reportarModal">
+                        <i class="fas fa-plus"></i> Reportar Incidencia
+                    </button>
+                </div>
+
+                <!-- Mensajes -->
+                <% if (success) { %>
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <i class="fas fa-check-circle"></i> <%= success %>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <% } %>
+                <% if (error) { %>
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle"></i> <%= error %>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <% } %>
+
+                <!-- Filtros -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label class="form-label">Filtrar por Estado:</label>
+                                <select class="form-select" id="filtroEstado">
+                                    <option value="">Todas</option>
+                                    <option value="abierta">Abiertas</option>
+                                    <option value="en_progreso">En Progreso</option>
+                                    <option value="resuelta">Resueltas</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de Incidencias -->
+                <div class="row" id="listaIncidencias">
+                    <% if (incidents && incidents.length > 0) { %>
+                        <% incidents.forEach(function(incident) { %>
+                            <div class="col-md-6 mb-4" data-estado="<%= incident.estado %>">
+                                <div class="card incident-card <%= incident.estado %> h-100">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-building"></i> <%= incident.espacio_nombre %>
+                                        </h6>
+                                        <span class="badge bg-<%= incident.estado === 'abierta' ? 'danger' : incident.estado === 'en_progreso' ? 'warning' : 'success' %>">
+                                            <%= incident.estado === 'abierta' ? 'Abierta' : incident.estado === 'en_progreso' ? 'En Progreso' : 'Resuelta' %>
+                                        </span>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-1"><strong>Tipo:</strong> <%= incident.tipo_incidencia %></p>
+                                        <p class="mb-2"><strong>Descripción:</strong> <%= incident.descripcion %></p>
+                                        <p class="mb-2 text-muted small">
+                                            <i class="fas fa-user"></i> Reportado por: <%= incident.usuario_reporta_nombre %><br>
+                                            <i class="fas fa-clock"></i> <%= new Date(incident.fecha_reporte).toLocaleString('es-CL') %>
+                                        </p>
+                                        
+                                        <% if (incident.estado === 'abierta') { %>
+                                            <button class="btn btn-warning btn-sm" onclick="aplicarBloqueo(<%= incident.id %>)">
+                                                <i class="fas fa-lock"></i> Aplicar Bloqueo
+                                            </button>
+                                        <% } %>
+                                        
+                                        <% if (incident.estado === 'en_progreso' || incident.estado === 'abierta') { %>
+                                            <button class="btn btn-success btn-sm" onclick="resolverIncidencia(<%= incident.id %>)">
+                                                <i class="fas fa-check"></i> Resolver
+                                            </button>
+                                        <% } %>
+                                        
+                                        <% if (incident.solucion) { %>
+                                            <div class="mt-2 p-2 bg-light rounded">
+                                                <strong>Solución:</strong> <%= incident.solucion %>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }); %>
+                    <% } else { %>
+                        <div class="col-12">
+                            <p class="text-muted text-center py-4">
+                                <i class="fas fa-inbox fa-3x mb-3 d-block"></i>
+                                No hay incidencias registradas
+                            </p>
+                        </div>
+                    <% } %>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal Reportar Incidencia -->
+    <div class="modal fade" id="reportarModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="/incidencias/reportar">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Reportar Incidencia</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Espacio</label>
+                            <select class="form-select" name="id_espacio" required>
+                                <option value="">Seleccione un espacio...</option>
+                                <% if (spaces) { spaces.forEach(function(space) { %>
+                                    <option value="<%= space.id %>"><%= space.nombre %></option>
+                                <% }); } %>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo de Incidencia</label>
+                            <select class="form-select" name="tipo_incidencia" required>
+                                <option value="">Seleccione tipo...</option>
+                                <option value="Mantenimiento">Mantenimiento</option>
+                                <option value="Daño">Daño</option>
+                                <option value="Limpieza">Limpieza</option>
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Descripción</label>
+                            <textarea class="form-control" name="descripcion" rows="3" required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Reportar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Aplicar Bloqueo -->
+    <div class="modal fade" id="bloqueoModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="/incidencias/bloquear">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Aplicar Bloqueo</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="id_incidencia" id="bloqueoIncidenciaId">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Advertencia:</strong> Este bloqueo cancelará todas las reservas existentes en el rango especificado.
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha y Hora Inicio</label>
+                            <input type="datetime-local" class="form-control" name="fecha_inicio" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha y Hora Fin</label>
+                            <input type="datetime-local" class="form-control" name="fecha_fin" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-warning">Aplicar Bloqueo</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Resolver Incidencia -->
+    <div class="modal fade" id="resolverModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="/incidencias/resolver">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Resolver Incidencia</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="id_incidencia" id="resolverIncidenciaId">
+                        <div class="mb-3">
+                            <label class="form-label">Descripción de la Solución</label>
+                            <textarea class="form-control" name="solucion" rows="3" required placeholder="Describa cómo se resolvió la incidencia..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">Marcar como Resuelta</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Filtro por estado
+        document.getElementById('filtroEstado').addEventListener('change', function() {
+            const estado = this.value;
+            const cards = document.querySelectorAll('#listaIncidencias > div[data-estado]');
+            
+            cards.forEach(card => {
+                if (estado === '' || card.dataset.estado === estado) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+
+        // Funciones para modales
+        function aplicarBloqueo(incidenciaId) {
+            document.getElementById('bloqueoIncidenciaId').value = incidenciaId;
+            new bootstrap.Modal(document.getElementById('bloqueoModal')).show();
+        }
+
+        function resolverIncidencia(incidenciaId) {
+            document.getElementById('resolverIncidenciaId').value = incidenciaId;
+            new bootstrap.Modal(document.getElementById('resolverModal')).show();
+        }
+    </script>
+</body>
+</html>

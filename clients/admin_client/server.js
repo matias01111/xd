@@ -102,17 +102,34 @@ app.get('/logout', (req, res) => {
 app.get('/dashboard', requireAdminAuth, async (req, res) => {
     try {
         // Obtener estadísticas generales
-        const [usersResponse, spacesResponse, bookingsResponse, incidentsResponse] = await Promise.all([
+        const [usersResponse, spacesResponse] = await Promise.all([
             axios.get(`${SERVICES.user}/users`),
-            axios.get(`${SERVICES.space}/spaces`),
-            axios.get(`${SERVICES.book}/bookings/user/1`), // Obtener todas las reservas
-            axios.get(`${SERVICES.incid}/incidents`)
+            axios.get(`${SERVICES.space}/spaces`)
         ]);
         
         const users = usersResponse.data;
         const spaces = spacesResponse.data;
-        const bookings = bookingsResponse.data;
-        const incidents = incidentsResponse.data;
+        
+        // Obtener todas las reservas para estadísticas
+        let allBookings = [];
+        let pendingBookings = [];
+        try {
+            const allBookingsResponse = await axios.get(`${SERVICES.book}/bookings`);
+            allBookings = allBookingsResponse.data;
+            pendingBookings = allBookings.filter(b => b.estado === 'pendiente');
+            console.log(`Total reservas: ${allBookings.length}, Pendientes: ${pendingBookings.length}`);
+        } catch (e) {
+            console.log('Error obteniendo reservas:', e.message);
+        }
+        
+        // Obtener incidencias
+        let incidents = [];
+        try {
+            const incidentsResponse = await axios.get(`${SERVICES.incid}/incidents`);
+            incidents = incidentsResponse.data;
+        } catch (e) {
+            console.log('Error obteniendo incidencias:', e.message);
+        }
         
         res.render('dashboard', {
             title: 'Panel de Administración',
@@ -120,10 +137,10 @@ app.get('/dashboard', requireAdminAuth, async (req, res) => {
             stats: {
                 totalUsers: users.length,
                 totalSpaces: spaces.length,
-                totalBookings: bookings.length,
+                totalBookings: allBookings.length,
                 totalIncidents: incidents.length
             },
-            recentBookings: bookings.slice(0, 10),
+            recentBookings: pendingBookings.slice(0, 10),
             recentIncidents: incidents.slice(0, 5)
         });
     } catch (error) {
@@ -148,7 +165,9 @@ app.get('/usuarios', requireAdminAuth, async (req, res) => {
         res.render('usuarios', {
             title: 'Gestión de Usuarios',
             user: req.user,
-            users: users
+            users: users,
+            success: req.query.success,
+            error: req.query.error
         });
     } catch (error) {
         console.error('Error cargando usuarios:', error.message);
@@ -175,7 +194,25 @@ app.post('/usuarios/crear', requireAdminAuth, async (req, res) => {
         res.redirect('/usuarios?success=Usuario creado exitosamente');
     } catch (error) {
         console.error('Error creando usuario:', error.message);
-        res.redirect('/usuarios?error=Error al crear usuario');
+        const errorMsg = error.response?.data?.detail || 'Error al crear usuario';
+        res.redirect('/usuarios?error=' + encodeURIComponent(errorMsg));
+    }
+});
+
+app.post('/usuarios/actualizar', requireAdminAuth, async (req, res) => {
+    try {
+        const { user_id, nombre, tipo_usuario } = req.body;
+        
+        await axios.put(`${SERVICES.user}/users/${user_id}`, {
+            nombre,
+            tipo_usuario
+        });
+        
+        res.redirect('/usuarios?success=Usuario actualizado exitosamente');
+    } catch (error) {
+        console.error('Error actualizando usuario:', error.message);
+        const errorMsg = error.response?.data?.detail || 'Error al actualizar usuario';
+        res.redirect('/usuarios?error=' + encodeURIComponent(errorMsg));
     }
 });
 
@@ -191,20 +228,144 @@ app.post('/usuarios/cambiar-rol', requireAdminAuth, async (req, res) => {
         res.redirect('/usuarios?success=Rol actualizado exitosamente');
     } catch (error) {
         console.error('Error cambiando rol:', error.message);
-        res.redirect('/usuarios?error=Error al cambiar rol');
+        const errorMsg = error.response?.data?.detail || 'Error al cambiar rol';
+        res.redirect('/usuarios?error=' + encodeURIComponent(errorMsg));
+    }
+});
+
+app.post('/usuarios/desactivar', requireAdminAuth, async (req, res) => {
+    try {
+        const { user_id } = req.body;
+        
+        await axios.delete(`${SERVICES.user}/users/${user_id}`);
+        
+        res.redirect('/usuarios?success=Usuario desactivado exitosamente');
+    } catch (error) {
+        console.error('Error desactivando usuario:', error.message);
+        const errorMsg = error.response?.data?.detail || 'Error al desactivar usuario';
+        res.redirect('/usuarios?error=' + encodeURIComponent(errorMsg));
+    }
+});
+
+app.post('/usuarios/activar', requireAdminAuth, async (req, res) => {
+    try {
+        const { user_id } = req.body;
+        
+        await axios.put(`${SERVICES.user}/users/${user_id}`, {
+            activo: true
+        });
+        
+        res.redirect('/usuarios?success=Usuario activado exitosamente');
+    } catch (error) {
+        console.error('Error activando usuario:', error.message);
+        const errorMsg = error.response?.data?.detail || 'Error al activar usuario';
+        res.redirect('/usuarios?error=' + encodeURIComponent(errorMsg));
+    }
+});
+
+// Gestión de Espacios
+app.get('/espacios', requireAdminAuth, async (req, res) => {
+    try {
+        const response = await axios.get(`${SERVICES.space}/spaces`);
+        const spaces = response.data;
+        
+        res.render('espacios', {
+            title: 'Gestión de Espacios',
+            user: req.user,
+            spaces: spaces,
+            success: req.query.success,
+            error: req.query.error
+        });
+    } catch (error) {
+        console.error('Error cargando espacios:', error.message);
+        res.render('espacios', {
+            title: 'Gestión de Espacios',
+            user: req.user,
+            spaces: [],
+            error: 'Error cargando espacios'
+        });
+    }
+});
+
+app.post('/espacios/crear', requireAdminAuth, async (req, res) => {
+    try {
+        const { nombre, tipo, capacidad } = req.body;
+        
+        await axios.post(`${SERVICES.space}/spaces/create`, {
+            nombre,
+            tipo,
+            capacidad: parseInt(capacidad)
+        });
+        
+        res.redirect('/espacios?success=Espacio creado exitosamente');
+    } catch (error) {
+        console.error('Error creando espacio:', error.message);
+        const errorMsg = error.response?.data?.detail || 'Error al crear espacio';
+        res.redirect('/espacios?error=' + encodeURIComponent(errorMsg));
+    }
+});
+
+app.post('/espacios/actualizar', requireAdminAuth, async (req, res) => {
+    try {
+        const { space_id, nombre, tipo, capacidad } = req.body;
+        
+        await axios.put(`${SERVICES.space}/spaces/${space_id}`, {
+            nombre,
+            tipo,
+            capacidad: parseInt(capacidad)
+        });
+        
+        res.redirect('/espacios?success=Espacio actualizado exitosamente');
+    } catch (error) {
+        console.error('Error actualizando espacio:', error.message);
+        const errorMsg = error.response?.data?.detail || 'Error al actualizar espacio';
+        res.redirect('/espacios?error=' + encodeURIComponent(errorMsg));
+    }
+});
+
+app.post('/espacios/desactivar', requireAdminAuth, async (req, res) => {
+    try {
+        const { space_id } = req.body;
+        
+        await axios.delete(`${SERVICES.space}/spaces/${space_id}`);
+        
+        res.redirect('/espacios?success=Espacio desactivado exitosamente');
+    } catch (error) {
+        console.error('Error desactivando espacio:', error.message);
+        const errorMsg = error.response?.data?.detail || 'Error al desactivar espacio';
+        res.redirect('/espacios?error=' + encodeURIComponent(errorMsg));
+    }
+});
+
+app.post('/espacios/activar', requireAdminAuth, async (req, res) => {
+    try {
+        const { space_id } = req.body;
+        
+        await axios.put(`${SERVICES.space}/spaces/${space_id}`, {
+            activo: true
+        });
+        
+        res.redirect('/espacios?success=Espacio activado exitosamente');
+    } catch (error) {
+        console.error('Error activando espacio:', error.message);
+        const errorMsg = error.response?.data?.detail || 'Error al activar espacio';
+        res.redirect('/espacios?error=' + encodeURIComponent(errorMsg));
     }
 });
 
 // Gestión de Reservas
 app.get('/reservas', requireAdminAuth, async (req, res) => {
     try {
-        const response = await axios.get(`${SERVICES.book}/bookings/user/1`);
+        // Obtener todas las reservas (sin filtro de estado para ver todas)
+        const response = await axios.get(`${SERVICES.book}/bookings`);
         const bookings = response.data;
         
         res.render('reservas', {
             title: 'Gestión de Reservas',
             user: req.user,
-            bookings: bookings
+            bookings: bookings,
+            success: req.query.success,
+            error: req.query.error
         });
     } catch (error) {
         console.error('Error cargando reservas:', error.message);
@@ -238,13 +399,21 @@ app.post('/reservas/aprobar', requireAdminAuth, async (req, res) => {
 // Gestión de Incidencias
 app.get('/incidencias', requireAdminAuth, async (req, res) => {
     try {
-        const response = await axios.get(`${SERVICES.incid}/incidents`);
-        const incidents = response.data;
+        const [incidentsResponse, spacesResponse] = await Promise.all([
+            axios.get(`${SERVICES.incid}/incidents`),
+            axios.get(`${SERVICES.space}/spaces`)
+        ]);
+        
+        const incidents = incidentsResponse.data;
+        const spaces = spacesResponse.data;
         
         res.render('incidencias', {
             title: 'Gestión de Incidencias',
             user: req.user,
-            incidents: incidents
+            incidents: incidents,
+            spaces: spaces,
+            success: req.query.success,
+            error: req.query.error
         });
     } catch (error) {
         console.error('Error cargando incidencias:', error.message);
@@ -252,17 +421,63 @@ app.get('/incidencias', requireAdminAuth, async (req, res) => {
             title: 'Gestión de Incidencias',
             user: req.user,
             incidents: [],
+            spaces: [],
             error: 'Error cargando incidencias'
         });
     }
 });
 
+app.post('/incidencias/reportar', requireAdminAuth, async (req, res) => {
+    try {
+        const { id_espacio, tipo_incidencia, descripcion } = req.body;
+        
+        console.log('Reportando incidencia:', {
+            id_espacio,
+            tipo_incidencia,
+            descripcion,
+            usuario_id: req.user.id,
+            usuario_nombre: req.user.nombre
+        });
+        
+        const response = await axios.post(`${SERVICES.incid}/incidents/report`, {
+            id_espacio: parseInt(id_espacio),
+            tipo_incidencia: tipo_incidencia,
+            descripcion: descripcion,
+            id_usuario_reporta: req.user.id
+        });
+        
+        console.log('Incidencia creada:', response.data);
+        res.redirect('/incidencias?success=Incidencia reportada exitosamente');
+    } catch (error) {
+        console.error('Error reportando incidencia:', error.response?.data || error.message);
+        res.redirect('/incidencias?error=Error al reportar incidencia: ' + (error.response?.data?.detail || error.message));
+    }
+});
+
+app.post('/incidencias/bloquear', requireAdminAuth, async (req, res) => {
+    try {
+        const { id_incidencia, fecha_inicio, fecha_fin } = req.body;
+        
+        await axios.post(`${SERVICES.incid}/incidents/block`, {
+            id_incidencia: parseInt(id_incidencia),
+            fecha_inicio: fecha_inicio,
+            fecha_fin: fecha_fin,
+            id_administrador: req.user.id
+        });
+        
+        res.redirect('/incidencias?success=Bloqueo aplicado. Reservas afectadas han sido canceladas.');
+    } catch (error) {
+        console.error('Error aplicando bloqueo:', error.message);
+        res.redirect('/incidencias?error=Error al aplicar bloqueo');
+    }
+});
+
 app.post('/incidencias/resolver', requireAdminAuth, async (req, res) => {
     try {
-        const { incident_id, solucion } = req.body;
+        const { id_incidencia, solucion } = req.body;
         
         await axios.post(`${SERVICES.incid}/incidents/resolve`, {
-            id_incidencia: parseInt(incident_id),
+            id_incidencia: parseInt(id_incidencia),
             solucion: solucion,
             id_usuario_resuelve: req.user.id
         });
@@ -280,10 +495,26 @@ app.get('/configuracion', requireAdminAuth, async (req, res) => {
         const response = await axios.get(`${SERVICES.admin}/admin/config`);
         const config = response.data;
         
+        // Obtener auditoría si hay filtro de fecha
+        let auditLogs = [];
+        if (req.query.fecha) {
+            try {
+                const auditResponse = await axios.get(`${SERVICES.admin}/admin/audit`, {
+                    params: { fecha: req.query.fecha }
+                });
+                auditLogs = auditResponse.data.filter(log => log.tabla_afectada === 'configuraciones');
+            } catch (auditError) {
+                console.error('Error cargando auditoría:', auditError.message);
+            }
+        }
+        
         res.render('configuracion', {
             title: 'Configuración del Sistema',
             user: req.user,
-            config: config
+            config: config,
+            auditLogs: auditLogs,
+            success: req.query.success,
+            error: req.query.error
         });
     } catch (error) {
         console.error('Error cargando configuración:', error.message);
@@ -291,9 +522,14 @@ app.get('/configuracion', requireAdminAuth, async (req, res) => {
             title: 'Configuración del Sistema',
             user: req.user,
             config: {},
+            auditLogs: [],
             error: 'Error cargando configuración'
         });
     }
+});
+
+app.get('/configuracion/auditoria', requireAdminAuth, async (req, res) => {
+    res.redirect(`/configuracion${req.query.fecha ? '?fecha=' + req.query.fecha : ''}`);
 });
 
 app.post('/configuracion/actualizar', requireAdminAuth, async (req, res) => {
@@ -305,37 +541,67 @@ app.post('/configuracion/actualizar', requireAdminAuth, async (req, res) => {
         res.redirect('/configuracion?success=Configuración actualizada exitosamente');
     } catch (error) {
         console.error('Error actualizando configuración:', error.message);
-        res.redirect('/configuracion?error=Error al actualizar configuración');
+        const errorMsg = error.response?.data?.detail || 'Error al actualizar configuración';
+        res.redirect('/configuracion?error=' + encodeURIComponent(errorMsg));
+    }
+});
+
+// API Reportes
+app.get('/api/reports/estadisticas', requireAdminAuth, async (req, res) => {
+    try {
+        const response = await axios.get(`${SERVICES.report}/reports/estadisticas`);
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error obteniendo estadísticas:', error.message);
+        res.status(500).json({ error: 'Error obteniendo estadísticas' });
+    }
+});
+
+app.post('/api/reports/uso', requireAdminAuth, async (req, res) => {
+    try {
+        const response = await axios.post(`${SERVICES.report}/reports/uso`, req.body);
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error generando reporte de uso:', error.message);
+        res.status(500).json({ error: 'Error generando reporte' });
+    }
+});
+
+app.get('/api/reports/auditoria', requireAdminAuth, async (req, res) => {
+    try {
+        const response = await axios.get(`${SERVICES.report}/reports/auditoria`, {
+            params: req.query
+        });
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error obteniendo auditoría:', error.message);
+        res.status(500).json({ error: 'Error obteniendo auditoría' });
+    }
+});
+
+app.get('/api/reports/incidencias', requireAdminAuth, async (req, res) => {
+    try {
+        const response = await axios.get(`${SERVICES.report}/reports/incidencias`);
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error obteniendo reporte de incidencias:', error.message);
+        res.status(500).json({ error: 'Error obteniendo reporte' });
     }
 });
 
 // Reportes
 app.get('/reportes', requireAdminAuth, async (req, res) => {
     try {
-        const fechaInicio = req.query.fecha_inicio || moment().subtract(30, 'days').format('YYYY-MM-DD');
-        const fechaFin = req.query.fecha_fin || moment().format('YYYY-MM-DD');
-        
-        const response = await axios.post(`${SERVICES.report}/reports/uso`, {
-            fecha_inicio: fechaInicio,
-            fecha_fin: fechaFin
-        });
-        
-        const reporte = response.data;
-        
         res.render('reportes', {
-            title: 'Reportes del Sistema',
-            user: req.user,
-            reporte: reporte,
-            fechaInicio: fechaInicio,
-            fechaFin: fechaFin
+            title: 'Reportes y Auditoría',
+            user: req.user
         });
     } catch (error) {
-        console.error('Error generando reportes:', error.message);
+        console.error('Error cargando vista de reportes:', error.message);
         res.render('reportes', {
-            title: 'Reportes del Sistema',
+            title: 'Reportes y Auditoría',
             user: req.user,
-            reporte: null,
-            error: 'Error generando reportes'
+            error: 'Error cargando reportes'
         });
     }
 });

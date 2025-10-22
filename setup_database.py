@@ -16,7 +16,7 @@ def setup_database():
             'host': 'localhost',
             'port': 5432,
             'user': 'postgres',
-            'password': 'password'  # Cambiar por tu contraseña
+            'password': 'xd'  # Cambiar por tu contraseña
         }
         
         # Conectar a PostgreSQL
@@ -47,12 +47,38 @@ def setup_database():
         
         # Ejecutar script de inicialización
         print("Ejecutando script de inicialización...")
-        with open('database/init.sql', 'r', encoding='utf-8') as f:
-            sql_script = f.read()
         
-        # Ejecutar el script
-        cursor.execute(sql_script)
-        conn.commit()
+        # Verificar si las tablas ya existen
+        cursor.execute("""
+            SELECT COUNT(*) 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        """)
+        table_count = cursor.fetchone()[0]
+        
+        if table_count == 0:
+            try:
+                with open('database/init.sql', 'r', encoding='utf-8') as f:
+                    sql_script = f.read()
+            except UnicodeDecodeError:
+                with open('database/init.sql', 'r', encoding='latin-1') as f:
+                    sql_script = f.read()
+            
+            # Eliminar comandos psql que no se pueden ejecutar con psycopg2
+            sql_lines = sql_script.split('\n')
+            clean_lines = []
+            for line in sql_lines:
+                # Omitir líneas con comandos psql como \c, CREATE DATABASE, etc.
+                if not line.strip().startswith('\\') and not 'CREATE DATABASE' in line.upper():
+                    clean_lines.append(line)
+            sql_script = '\n'.join(clean_lines)
+        
+            # Ejecutar el script
+            cursor.execute(sql_script)
+            conn.commit()
+            print("✅ Tablas creadas exitosamente")
+        else:
+            print("ℹ️  Las tablas ya existen, omitiendo creación")
         
         print("✅ Base de datos configurada exitosamente")
         
@@ -114,7 +140,10 @@ def setup_database():
         print("❌ No se encontró el archivo database/init.sql")
         
     except Exception as e:
+        import traceback
         print(f"❌ Error inesperado: {e}")
+        print("\nTraceback completo:")
+        traceback.print_exc()
 
 if __name__ == "__main__":
     setup_database()

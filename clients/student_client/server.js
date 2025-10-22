@@ -96,8 +96,10 @@ app.get('/logout', (req, res) => {
 app.get('/dashboard', requireAuth, async (req, res) => {
     try {
         // Obtener reservas del usuario
+        console.log('Obteniendo reservas para usuario ID:', req.user.id);
         const bookingsResponse = await axios.get(`${SERVICES.book}/bookings/user/${req.user.id}`);
         const bookings = bookingsResponse.data;
+        console.log('Reservas obtenidas:', bookings.length, 'reservas');
         
         // Obtener espacios disponibles
         const spacesResponse = await axios.get(`${SERVICES.space}/spaces`);
@@ -124,7 +126,10 @@ app.get('/dashboard', requireAuth, async (req, res) => {
 app.get('/disponibilidad', requireAuth, (req, res) => {
     res.render('disponibilidad', {
         title: 'Consultar Disponibilidad',
-        user: req.user
+        user: req.user,
+        searchParams: null,
+        results: null,
+        error: null
     });
 });
 
@@ -132,25 +137,34 @@ app.post('/disponibilidad', requireAuth, async (req, res) => {
     try {
         const { fecha, hora, duracion, tipo_espacio } = req.body;
         
-        const response = await axios.post(`${SERVICES.avail}/availability/check`, {
-            fecha: fecha,
-            hora: hora,
-            duracion: parseInt(duracion),
-            tipo_espacio: tipo_espacio || null
+        // Construir fecha_inicio y fecha_fin
+        const fecha_inicio = `${fecha}T${hora}:00`;
+        const fecha_inicio_dt = new Date(fecha_inicio);
+        const fecha_fin_dt = new Date(fecha_inicio_dt.getTime() + (parseInt(duracion) * 60 * 60 * 1000));
+        const fecha_fin = fecha_fin_dt.toISOString();
+        
+        const response = await axios.post(`${SERVICES.avail}/availability/spaces`, {
+            tipo: tipo_espacio || null,
+            fecha_inicio: fecha_inicio,
+            fecha_fin: fecha_fin
         });
         
         res.render('disponibilidad', {
             title: 'Consultar Disponibilidad',
             user: req.user,
             results: response.data,
-            searchParams: req.body
+            searchParams: req.body,
+            error: null
         });
     } catch (error) {
         console.error('Error consultando disponibilidad:', error.message);
+        console.error('Error details:', error.response?.data);
         res.render('disponibilidad', {
             title: 'Consultar Disponibilidad',
             user: req.user,
-            error: 'Error consultando disponibilidad'
+            error: 'Error consultando disponibilidad',
+            searchParams: req.body,
+            results: null
         });
     }
 });
@@ -159,17 +173,24 @@ app.post('/reservar', requireAuth, async (req, res) => {
     try {
         const { id_espacio, fecha_inicio, fecha_fin, motivo } = req.body;
         
-        const response = await axios.post(`${SERVICES.book}/bookings/create`, {
+        console.log('Datos recibidos en /reservar:', req.body);
+        
+        const bookingData = {
             id_usuario: req.user.id,
             id_espacio: parseInt(id_espacio),
             fecha_inicio: fecha_inicio,
             fecha_fin: fecha_fin,
-            motivo: motivo
-        });
+            motivo: motivo || "Reserva de espacio"
+        };
+        
+        console.log('Datos a enviar al servicio:', bookingData);
+        
+        const response = await axios.post(`${SERVICES.book}/bookings/create`, bookingData);
         
         res.redirect('/dashboard?success=Reserva creada exitosamente');
     } catch (error) {
         console.error('Error creando reserva:', error.message);
+        console.error('Response data:', error.response?.data);
         res.redirect('/dashboard?error=Error al crear reserva');
     }
 });

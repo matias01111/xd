@@ -13,26 +13,31 @@ def run_client(client_name, client_dir, port):
     try:
         print(f"Iniciando {client_name} en puerto {port}...")
         
-        # Cambiar al directorio del cliente
-        os.chdir(client_dir)
+        # Obtener ruta absoluta del directorio del cliente
+        abs_client_dir = os.path.abspath(client_dir)
         
-        # Instalar dependencias si no existen
-        if not os.path.exists(os.path.join(client_dir, "node_modules")):
+        # Verificar si existen las dependencias
+        node_modules_path = os.path.join(abs_client_dir, "node_modules")
+        if not os.path.exists(node_modules_path):
             print(f"Instalando dependencias para {client_name}...")
-            subprocess.run(["npm", "install"], check=True)
+            subprocess.run(["npm", "install"], cwd=abs_client_dir, check=True)
         
-        # Iniciar el cliente
+        # Iniciar el cliente sin cambiar el directorio actual
+        server_path = os.path.join(abs_client_dir, "server.js")
         process = subprocess.Popen([
-            "node", "server.js"
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            "node", server_path
+        ], cwd=abs_client_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
         # Esperar un poco para que el cliente se inicie
-        time.sleep(3)
+        time.sleep(2)
         
         if process.poll() is None:
             print(f"✅ {client_name} iniciado correctamente en puerto {port}")
         else:
+            stdout, stderr = process.communicate()
             print(f"❌ Error iniciando {client_name}")
+            if stderr:
+                print(f"   Error: {stderr.decode('utf-8', errors='ignore')[:200]}")
             
         return process
     except Exception as e:

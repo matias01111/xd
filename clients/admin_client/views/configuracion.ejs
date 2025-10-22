@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> - Sistema UDP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --udp-primary: #003366;
+            --udp-secondary: #0066cc;
+            --udp-accent: #ff6600;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        .navbar {
+            background: var(--udp-primary) !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            color: white !important;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .config-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .config-header {
+            border-bottom: 3px solid var(--udp-secondary);
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+        .config-header h4 {
+            color: var(--udp-primary);
+            margin: 0;
+        }
+        .config-header i {
+            color: var(--udp-accent);
+            margin-right: 10px;
+        }
+        .form-label {
+            font-weight: 600;
+            color: var(--udp-primary);
+            margin-bottom: 8px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--udp-secondary);
+            box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+        }
+        .btn-primary {
+            background: var(--udp-secondary);
+            border: none;
+            padding: 10px 30px;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: var(--udp-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .btn-secondary {
+            padding: 10px 30px;
+            font-weight: 600;
+        }
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        .info-badge {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .config-description {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .input-group-text {
+            background: var(--udp-secondary);
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+        .audit-section {
+            margin-top: 40px;
+        }
+        .audit-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+        .audit-table {
+            margin-top: 20px;
+        }
+        .audit-table th {
+            background: var(--udp-primary);
+            color: white;
+            font-weight: 600;
+            border: none;
+        }
+        .audit-table td {
+            vertical-align: middle;
+        }
+        .badge-action {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="fas fa-university"></i> Sistema de Reservas UDP - Administrador
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/dashboard"><i class="fas fa-home"></i> Inicio</a>
+                <a class="nav-link" href="/reservas"><i class="fas fa-calendar-check"></i> Reservas</a>
+                <a class="nav-link" href="/incidencias"><i class="fas fa-exclamation-triangle"></i> Incidencias</a>
+                <a class="nav-link active" href="/configuracion"><i class="fas fa-cog"></i> Configuración</a>
+                <a class="nav-link" href="/logout"><i class="fas fa-sign-out-alt"></i> Salir</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <% if (typeof success !== 'undefined' && success) { %>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle"></i> <%= success %>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <% } %>
+
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle"></i> <%= error %>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <% } %>
+
+        <!-- Tarjeta de Configuración -->
+        <div class="config-card">
+            <div class="config-header">
+                <h4><i class="fas fa-sliders-h"></i> Parámetros Operativos del Sistema</h4>
+            </div>
+
+            <div class="info-badge">
+                <i class="fas fa-info-circle"></i>
+                <strong>Importante:</strong> Los cambios en la configuración se aplicarán inmediatamente y afectarán a todas las nuevas reservas. 
+                Todos los cambios quedan registrados en el log de auditoría.
+            </div>
+
+            <form action="/configuracion/actualizar" method="POST" id="configForm">
+                <div class="row">
+                    <!-- Ventana de Anticipación -->
+                    <div class="col-md-6 mb-4">
+                        <label for="ventana_anticipacion_dias" class="form-label">
+                            <i class="fas fa-calendar-alt"></i> Ventana de Anticipación
+                        </label>
+                        <div class="input-group">
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="ventana_anticipacion_dias" 
+                                name="ventana_anticipacion_dias" 
+                                value="<%= config.ventana_anticipacion_dias || 7 %>"
+                                min="1"
+                                max="365"
+                                required>
+                            <span class="input-group-text">días</span>
+                        </div>
+                        <div class="config-description">
+                            Cantidad máxima de días con anticipación que un usuario puede hacer una reserva
+                        </div>
+                    </div>
+
+                    <!-- Máximo de Reservas por Usuario -->
+                    <div class="col-md-6 mb-4">
+                        <label for="max_reservas_usuario" class="form-label">
+                            <i class="fas fa-users"></i> Máximo de Reservas por Usuario
+                        </label>
+                        <div class="input-group">
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="max_reservas_usuario" 
+                                name="max_reservas_usuario" 
+                                value="<%= config.max_reservas_usuario || 1 %>"
+                                min="1"
+                                max="10"
+                                required>
+                            <span class="input-group-text">reservas</span>
+                        </div>
+                        <div class="config-description">
+                            Número máximo de reservas activas permitidas simultáneamente por usuario
+                        </div>
+                    </div>
+
+                    <!-- Duración Máxima -->
+                    <div class="col-md-6 mb-4">
+                        <label for="duracion_max_horas" class="form-label">
+                            <i class="fas fa-clock"></i> Duración Máxima de Reserva
+                        </label>
+                        <div class="input-group">
+                            <input 
+                                type="number" 
+                                class="form-control" 
+                                id="duracion_max_horas" 
+                                name="duracion_max_horas" 
+                                value="<%= config.duracion_max_horas || 4 %>"
+                                min="1"
+                                max="24"
+                                step="0.5"
+                                required>
+                            <span class="input-group-text">horas</span>
+                        </div>
+                        <div class="config-description">
+                            Duración máxima permitida para una reserva individual
+                        </div>
+                    </div>
+
+                    <!-- Horario de Inicio -->
+                    <div class="col-md-3 mb-4">
+                        <label for="hora_inicio" class="form-label">
+                            <i class="fas fa-sun"></i> Hora de Inicio
+                        </label>
+                        <input 
+                            type="time" 
+                            class="form-control" 
+                            id="hora_inicio" 
+                            name="hora_inicio" 
+                            value="<%= config.hora_inicio || '08:00' %>"
+                            required>
+                        <div class="config-description">
+                            Horario de apertura
+                        </div>
+                    </div>
+
+                    <!-- Horario de Fin -->
+                    <div class="col-md-3 mb-4">
+                        <label for="hora_fin" class="form-label">
+                            <i class="fas fa-moon"></i> Hora de Cierre
+                        </label>
+                        <input 
+                            type="time" 
+                            class="form-control" 
+                            id="hora_fin" 
+                            name="hora_fin" 
+                            value="<%= config.hora_fin || '22:00' %>"
+                            required>
+                        <div class="config-description">
+                            Horario de cierre
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <button type="button" class="btn btn-secondary" onclick="window.location.href='/dashboard'">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sección de Auditoría -->
+        <div class="audit-section">
+            <div class="audit-card">
+                <div class="config-header">
+                    <h4><i class="fas fa-history"></i> Log de Auditoría - Cambios de Configuración</h4>
+                </div>
+
+                <div class="mb-3">
+                    <form action="/configuracion/auditoria" method="GET" class="row g-3">
+                        <div class="col-md-4">
+                            <label for="fechaFiltro" class="form-label">Filtrar por fecha:</label>
+                            <input 
+                                type="date" 
+                                class="form-control" 
+                                id="fechaFiltro" 
+                                name="fecha"
+                                max="<%= new Date().toISOString().split('T')[0] %>">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" class="btn btn-secondary w-100" onclick="window.location.href='/configuracion'">
+                                <i class="fas fa-redo"></i> Limpiar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-responsive audit-table">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha y Hora</th>
+                                <th>Acción</th>
+                                <th>Usuario</th>
+                                <th>Cambios Realizados</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody">
+                            <% if (typeof auditLogs !== 'undefined' && auditLogs && auditLogs.length > 0) { %>
+                                <% auditLogs.forEach(log => { %>
+                                    <tr>
+                                        <td>
+                                            <i class="fas fa-calendar-day text-muted"></i>
+                                            <%= new Date(log.fecha_accion).toLocaleString('es-CL') %>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-action bg-info">
+                                                <%= log.accion %>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <i class="fas fa-user text-muted"></i>
+                                            Usuario #<%= log.usuario_id || 'Sistema' %>
+                                        </td>
+                                        <td>
+                                            <button 
+                                                class="btn btn-sm btn-outline-primary" 
+                                                onclick="verCambios('<%= JSON.stringify(log.datos_anteriores).replace(/'/g, "\\'") %>', '<%= JSON.stringify(log.datos_nuevos).replace(/'/g, "\\'") %>')">
+                                                <i class="fas fa-eye"></i> Ver detalles
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <% }); %>
+                            <% } else { %>
+                                <tr>
+                                    <td colspan="4">
+                                        <div class="empty-state">
+                                            <i class="fas fa-inbox"></i>
+                                            <p>No hay registros de auditoría disponibles</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Ver Cambios -->
+    <div class="modal fade" id="cambiosModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-exchange-alt"></i> Detalles de los Cambios
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-danger"><i class="fas fa-arrow-left"></i> Valores Anteriores</h6>
+                            <pre id="datosAnteriores" class="bg-light p-3 rounded"></pre>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-success"><i class="fas fa-arrow-right"></i> Valores Nuevos</h6>
+                            <pre id="datosNuevos" class="bg-light p-3 rounded"></pre>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Validación del formulario
+        document.getElementById('configForm').addEventListener('submit', function(e) {
+            const horaInicio = document.getElementById('hora_inicio').value;
+            const horaFin = document.getElementById('hora_fin').value;
+
+            if (horaInicio >= horaFin) {
+                e.preventDefault();
+                alert('La hora de cierre debe ser posterior a la hora de inicio');
+                return false;
+            }
+
+            if (!confirm('¿Está seguro de que desea actualizar la configuración del sistema? Los cambios se aplicarán de inmediato.')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        // Ver cambios en modal
+        function verCambios(datosAnteriores, datosNuevos) {
+            try {
+                const anterior = JSON.parse(datosAnteriores);
+                const nuevo = JSON.parse(datosNuevos);
+                
+                document.getElementById('datosAnteriores').textContent = JSON.stringify(anterior, null, 2);
+                document.getElementById('datosNuevos').textContent = JSON.stringify(nuevo, null, 2);
+                
+                const modal = new bootstrap.Modal(document.getElementById('cambiosModal'));
+                modal.show();
+            } catch (e) {
+                console.error('Error al parsear datos:', e);
+                alert('Error al cargar los detalles de los cambios');
+            }
+        }
+
+        // Procesar parámetros de URL para mostrar mensajes
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('success')) {
+            // El mensaje ya se muestra desde el servidor
+        }
+    </script>
+</body>
+</html>

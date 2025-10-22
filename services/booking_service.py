@@ -17,8 +17,12 @@ import uvicorn
 from database.db_config import get_db, init_db
 from database.models import Reserva, Usuario, Espacio, Configuracion, Auditoria, Notificacion
 from services.common.soa_protocol import SOAProtocol
+import requests
 
 app = FastAPI(title="Servicio de Reservas - BOOK")
+
+# URL del servicio de notificaciones
+NOTIFICATION_SERVICE = "http://localhost:5008"
 
 # Inicializar base de datos
 init_db()
@@ -76,6 +80,25 @@ def create_notification(db: Session, tipo: str, id_reserva: int, email_destinata
     )
     db.add(notif)
     db.commit()
+
+def send_notification_async(tipo: str, reserva_id: int, usuario_id: int):
+    """Enviar notificación al servicio de notificaciones de forma asíncrona"""
+    try:
+        response = requests.post(
+            f"{NOTIFICATION_SERVICE}/notifications/send",
+            json={
+                "tipo": tipo,
+                "reserva_id": reserva_id,
+                "usuario_id": usuario_id
+            },
+            timeout=5
+        )
+        if response.status_code == 200:
+            print(f"Notificación '{tipo}' enviada para reserva #{reserva_id}")
+        else:
+            print(f"Error al enviar notificación: {response.status_code}")
+    except Exception as e:
+        print(f"Error al conectar con servicio de notificaciones: {e}")
 
 def get_configuracion(db: Session) -> Configuracion:
     """Obtener configuración actual del sistema"""
@@ -190,13 +213,8 @@ async def create_booking(booking_data: ReservaCreate, db: Session = Depends(get_
             "estado": "pendiente"
         }, booking_data.id_usuario)
         
-        # Crear notificación
-        create_notification(
-            db, "reserva_creada", new_booking.id_reserva,
-            usuario.correo_institucional,
-            "Reserva Creada",
-            f"Su reserva para {espacio.nombre} ha sido creada y está pendiente de aprobación."
-        )
+        # Enviar notificación de creación
+        send_notification_async("creacion", new_booking.id_reserva, booking_data.id_usuario)
         
         return ReservaResponse(
             id=new_booking.id_reserva,
@@ -212,20 +230,36 @@ async def create_booking(booking_data: ReservaCreate, db: Session = Depends(get_
             usuario_nombre=usuario.nombre
         )
         
+    except HTTPException as he:
+        db.rollback()
+        raise he
     except Exception as e:
         db.rollback()
+        print(f"Error creating booking: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/bookings/user/{user_id}", response_model=List[ReservaResponse])
 async def get_user_bookings(user_id: int, db: Session = Depends(get_db)):
     """Obtener reservas de un usuario"""
     try:
-        reservas = db.query(Reserva).join(Espacio).join(Usuario).filter(
+        print(f"Buscando reservas para usuario ID: {user_id}")
+        reservas = db.query(Reserva).filter(
             Reserva.id_usuario == user_id
         ).order_by(Reserva.fecha_solicitud.desc()).all()
         
-        return [
-            ReservaResponse(
+        print(f"Encontradas {len(reservas)} reservas")
+        
+        result = []
+        for reserva in reservas:
+            # Obtener espacio y usuario relacionados
+            espacio = db.query(Espacio).filter(Espacio.id_espacio == reserva.id_espacio).first()
+            usuario = db.query(Usuario).filter(Usuario.id_usuario == reserva.id_usuario).first()
+            
+            print(f"Reserva ID {reserva.id_reserva}: {espacio.nombre if espacio else 'N/A'} - Estado: {reserva.estado}")
+            
+            result.append(ReservaResponse(
                 id=reserva.id_reserva,
                 id_usuario=reserva.id_usuario,
                 id_espacio=reserva.id_espacio,
@@ -235,12 +269,55 @@ async def get_user_bookings(user_id: int, db: Session = Depends(get_db)):
                 motivo=reserva.motivo,
                 fecha_solicitud=reserva.fecha_solicitud,
                 recurrente=reserva.recurrente,
-                espacio_nombre=reserva.espacio.nombre,
-                usuario_nombre=reserva.usuario.nombre
-            )
-            for reserva in reservas
-        ]
+                espacio_nombre=espacio.nombre if espacio else "Desconocido",
+                usuario_nombre=usuario.nombre if usuario else "Desconocido"
+            ))
+        
+        return result
     except Exception as e:
+        print(f"Error obteniendo reservas: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/bookings", response_model=List[ReservaResponse])
+async def get_all_bookings(estado: Optional[str] = None, db: Session = Depends(get_db)):
+    """Obtener todas las reservas, opcionalmente filtradas por estado"""
+    try:
+        print(f"Obteniendo todas las reservas. Estado filtro: {estado}")
+        
+        query = db.query(Reserva)
+        if estado:
+            query = query.filter(Reserva.estado == estado)
+        
+        reservas = query.order_by(Reserva.fecha_solicitud.desc()).all()
+        print(f"Encontradas {len(reservas)} reservas")
+        
+        result = []
+        for reserva in reservas:
+            # Obtener espacio y usuario relacionados
+            espacio = db.query(Espacio).filter(Espacio.id_espacio == reserva.id_espacio).first()
+            usuario = db.query(Usuario).filter(Usuario.id_usuario == reserva.id_usuario).first()
+            
+            result.append(ReservaResponse(
+                id=reserva.id_reserva,
+                id_usuario=reserva.id_usuario,
+                id_espacio=reserva.id_espacio,
+                fecha_inicio=reserva.fecha_inicio,
+                fecha_fin=reserva.fecha_fin,
+                estado=reserva.estado,
+                motivo=reserva.motivo,
+                fecha_solicitud=reserva.fecha_solicitud,
+                recurrente=reserva.recurrente,
+                espacio_nombre=espacio.nombre if espacio else "Desconocido",
+                usuario_nombre=usuario.nombre if usuario else "Desconocido"
+            ))
+        
+        return result
+    except Exception as e:
+        print(f"Error obteniendo todas las reservas: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/bookings/approve")
@@ -270,18 +347,9 @@ async def approve_booking(request: AprobarReservaRequest, db: Session = Depends(
         datos_nuevos = {"estado": request.estado}
         log_audit(db, "reservas", "aprobar", request.id_reserva, datos_anteriores, datos_nuevos, request.id_administrador)
         
-        # Crear notificación
-        tipo_notif = "reserva_aprobada" if request.estado == "aprobada" else "reserva_rechazada"
-        asunto = "Reserva Aprobada" if request.estado == "aprobada" else "Reserva Rechazada"
-        contenido = f"Su reserva ha sido {request.estado}."
-        if request.motivo:
-            contenido += f" Motivo: {request.motivo}"
-        
-        create_notification(
-            db, tipo_notif, reserva.id_reserva,
-            reserva.usuario.correo_institucional,
-            asunto, contenido
-        )
+        # Enviar notificación
+        tipo_notif = "aprobacion" if request.estado == "aprobada" else "rechazo"
+        send_notification_async(tipo_notif, reserva.id_reserva, reserva.id_usuario)
         
         return {"updated": True, "notificado": True}
         
@@ -311,13 +379,8 @@ async def cancel_booking(booking_id: int, db: Session = Depends(get_db)):
         datos_nuevos = {"estado": "cancelada"}
         log_audit(db, "reservas", "cancelar", booking_id, datos_anteriores, datos_nuevos, reserva.id_usuario)
         
-        # Crear notificación
-        create_notification(
-            db, "reserva_cancelada", reserva.id_reserva,
-            reserva.usuario.correo_institucional,
-            "Reserva Cancelada",
-            "Su reserva ha sido cancelada."
-        )
+        # Enviar notificación de cancelación
+        send_notification_async("cancelacion", reserva.id_reserva, reserva.id_usuario)
         
         return {"cancelado": True}
         

@@ -14,11 +14,13 @@ class Usuario(Base):
     correo_institucional = Column(String(100), unique=True, nullable=False, index=True)
     nombre = Column(String(100), nullable=False)
     tipo_usuario = Column(String(20), nullable=False)  # estudiante, funcionario, administrador
+    password_hash = Column(String(255), nullable=True)  # Hash de la contraseña
     activo = Column(Boolean, default=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relaciones
-    reservas = relationship("Reserva", back_populates="usuario")
+    reservas = relationship("Reserva", foreign_keys="Reserva.id_usuario", back_populates="usuario")
+    reservas_aprobadas = relationship("Reserva", foreign_keys="Reserva.id_administrador_aprobador", back_populates="administrador_aprobador")
     incidencias_reportadas = relationship("Incidencia", foreign_keys="Incidencia.id_usuario_reporta", back_populates="usuario_reporta")
     incidencias_resueltas = relationship("Incidencia", foreign_keys="Incidencia.id_usuario_resuelve", back_populates="usuario_resuelve")
     auditorias = relationship("Auditoria", back_populates="usuario")

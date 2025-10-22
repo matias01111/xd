@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes y Auditoría - Panel Admin UDP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .nav-link.active {
+            background-color: #dc3545 !important;
+            color: white !important;
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <nav class="col-md-3 col-lg-2 d-md-block sidebar">
+            <div class="position-sticky pt-3">
+                <div class="text-center mb-4">
+                    <h4 class="text-danger">
+                        <i class="fas fa-shield-alt"></i> Admin UDP
+                    </h4>
+                    <small class="text-muted"><%= user.nombre %></small>
+                </div>
+                
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/dashboard">
+                            <i class="fas fa-home"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/usuarios">
+                            <i class="fas fa-users"></i> Usuarios
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/espacios">
+                            <i class="fas fa-door-open"></i> Espacios
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/reservas">
+                            <i class="fas fa-calendar-check"></i> Reservas
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/incidencias">
+                            <i class="fas fa-exclamation-triangle"></i> Incidencias
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/configuracion">
+                            <i class="fas fa-cog"></i> Configuración
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/reportes">
+                            <i class="fas fa-chart-bar"></i> Reportes
+                        </a>
+                    </li>
+                </ul>
+                
+                <hr>
+                
+                <div class="text-center">
+                    <a href="/logout" class="btn btn-outline-danger btn-sm">
+                        <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main content -->
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+<div class="container-fluid">
+    <h1 class="mt-4">📊 Reportes y Auditoría</h1>
+    <p class="text-muted">Estadísticas, reportes de uso y auditoría del sistema</p>
+
+    <!-- Estadísticas Generales -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">📈 Estadísticas Generales</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="estadisticas-generales">
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3 class="text-primary" id="stat-usuarios">-</h3>
+                                    <p class="text-muted mb-0">Usuarios Activos</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3 class="text-success" id="stat-espacios">-</h3>
+                                    <p class="text-muted mb-0">Espacios Activos</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3 class="text-info" id="stat-reservas">-</h3>
+                                    <p class="text-muted mb-0">Total Reservas</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3 class="text-warning" id="stat-incidencias">-</h3>
+                                    <p class="text-muted mb-0">Incidencias Abiertas</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <div class="alert alert-success">
+                                <strong>Tasa de Aprobación:</strong> <span id="tasa-aprobacion">-</span>%
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-danger">
+                                <strong>Tasa de Rechazo:</strong> <span id="tasa-rechazo">-</span>%
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="alert alert-info">
+                                <strong>Pendientes:</strong> <span id="reservas-pendientes">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs de Reportes -->
+    <ul class="nav nav-tabs" id="reportesTabs" role="tablist">
+        <li class="nav-item">
+            <a class="nav-link active" id="uso-tab" data-bs-toggle="tab" href="#uso" role="tab">
+                📊 Reporte de Uso
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="auditoria-tab" data-bs-toggle="tab" href="#auditoria" role="tab">
+                📋 Auditoría
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" id="incidencias-tab" data-bs-toggle="tab" href="#incidencias" role="tab">
+                🚨 Incidencias
+            </a>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3" id="reportesTabContent">
+        <!-- Tab Reporte de Uso -->
+        <div class="tab-pane fade show active" id="uso" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Reporte de Uso de Espacios</h5>
+                </div>
+                <div class="card-body">
+                    <form id="formReporteUso" class="mb-4">
+                        <div class="row">
+                            <div class="col-md-5">
+                                <label>Fecha Inicio:</label>
+                                <input type="date" class="form-control" id="uso-fecha-inicio" required>
+                            </div>
+                            <div class="col-md-5">
+                                <label>Fecha Fin:</label>
+                                <input type="date" class="form-control" id="uso-fecha-fin" required>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary btn-block">
+                                    Generar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div id="resultadoReporteUso" style="display:none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h4>Ocupación: <span id="ocupacion-porcentaje" class="text-primary">0%</span></h4>
+                                        <p class="text-muted mb-0">Total de reservas: <span id="total-reservas-periodo">0</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card bg-light">
+                                    <div class="card-body">
+                                        <h5>Reservas por Estado:</h5>
+                                        <ul class="list-unstyled mb-0" id="reservas-estado-list"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <h5>🏆 Top 5 Espacios Más Usados</h5>
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Espacio</th>
+                                        <th>Usos</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="espacios-mas-usados-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Auditoría -->
+        <div class="tab-pane fade" id="auditoria" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Historial de Auditoría</h5>
+                </div>
+                <div class="card-body">
+                    <form id="formAuditoria" class="mb-4">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label>Fecha Inicio:</label>
+                                <input type="date" class="form-control" id="audit-fecha-inicio">
+                            </div>
+                            <div class="col-md-4">
+                                <label>Fecha Fin:</label>
+                                <input type="date" class="form-control" id="audit-fecha-fin">
+                            </div>
+                            <div class="col-md-2">
+                                <label>Acción:</label>
+                                <select class="form-control" id="audit-accion">
+                                    <option value="">Todas</option>
+                                    <option value="crear">Crear</option>
+                                    <option value="actualizar">Actualizar</option>
+                                    <option value="eliminar">Eliminar</option>
+                                    <option value="aprobar">Aprobar</option>
+                                    <option value="cancelar">Cancelar</option>
+                                    <option value="configurar">Configurar</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary btn-block">
+                                    Buscar
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Fecha/Hora</th>
+                                    <th>Acción</th>
+                                    <th>Tabla</th>
+                                    <th>Usuario</th>
+                                    <th>Detalles</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditoria-tbody">
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        Seleccione filtros y haga clic en Buscar
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Incidencias -->
+        <div class="tab-pane fade" id="incidencias" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Reporte de Incidencias</h5>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-success mb-3" id="btnCargarIncidencias">
+                        🔄 Cargar Reporte
+                    </button>
+
+                    <div id="resultadoIncidencias" style="display:none;">
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h5>Incidencias por Estado</h5>
+                                <ul class="list-group" id="incidencias-estado-list"></ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h5>Incidencias por Tipo</h5>
+                                <ul class="list-group" id="incidencias-tipo-list"></ul>
+                            </div>
+                        </div>
+                        <div class="alert alert-info">
+                            <strong>Total de Incidencias:</strong> <span id="total-incidencias">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Cargar estadísticas generales al inicio
+async function cargarEstadisticas() {
+    try {
+        const response = await fetch('/api/reports/estadisticas');
+        const data = await response.json();
+        
+        document.getElementById('stat-usuarios').textContent = data.usuarios_activos;
+        document.getElementById('stat-espacios').textContent = data.espacios_activos;
+        document.getElementById('stat-reservas').textContent = data.total_reservas;
+        document.getElementById('stat-incidencias').textContent = data.incidencias_abiertas;
+        document.getElementById('tasa-aprobacion').textContent = data.tasa_aprobacion;
+        document.getElementById('tasa-rechazo').textContent = data.tasa_rechazo;
+        document.getElementById('reservas-pendientes').textContent = data.reservas_pendientes;
+    } catch (error) {
+        console.error('Error cargando estadísticas:', error);
+    }
+}
+
+// Reporte de Uso
+document.getElementById('formReporteUso').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const fechaInicio = document.getElementById('uso-fecha-inicio').value;
+    const fechaFin = document.getElementById('uso-fecha-fin').value;
+    
+    try {
+        const response = await fetch('/api/reports/uso', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fecha_inicio: fechaInicio, fecha_fin: fechaFin })
+        });
+        
+        const data = await response.json();
+        
+        document.getElementById('ocupacion-porcentaje').textContent = data.ocupacion_porcentaje + '%';
+        document.getElementById('total-reservas-periodo').textContent = data.total_reservas;
+        
+        // Reservas por estado
+        const estadoList = document.getElementById('reservas-estado-list');
+        estadoList.innerHTML = '';
+        for (const [estado, cantidad] of Object.entries(data.reservas_por_estado)) {
+            estadoList.innerHTML += `<li>• ${estado}: <strong>${cantidad}</strong></li>`;
+        }
+        
+        // Espacios más usados
+        const tbody = document.getElementById('espacios-mas-usados-tbody');
+        tbody.innerHTML = '';
+        data.espacios_mas_usados.forEach((espacio, index) => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${espacio.nombre}</td>
+                    <td><span class="badge badge-primary">${espacio.uso}</span></td>
+                </tr>
+            `;
+        });
+        
+        document.getElementById('resultadoReporteUso').style.display = 'block';
+    } catch (error) {
+        alert('Error generando reporte: ' + error.message);
+    }
+});
+
+// Auditoría
+document.getElementById('formAuditoria').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const fechaInicio = document.getElementById('audit-fecha-inicio').value;
+    const fechaFin = document.getElementById('audit-fecha-fin').value;
+    const accion = document.getElementById('audit-accion').value;
+    
+    const params = new URLSearchParams();
+    if (fechaInicio) params.append('fecha_inicio', fechaInicio);
+    if (fechaFin) params.append('fecha_fin', fechaFin);
+    if (accion) params.append('accion', accion);
+    
+    try {
+        const response = await fetch(`/api/reports/auditoria?${params}`);
+        const data = await response.json();
+        
+        const tbody = document.getElementById('auditoria-tbody');
+        tbody.innerHTML = '';
+        
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No se encontraron registros</td></tr>';
+        } else {
+            data.forEach(audit => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${audit.fecha}</td>
+                        <td><span class="badge badge-info">${audit.accion}</span></td>
+                        <td>${audit.tabla_afectada}</td>
+                        <td>${audit.usuario}</td>
+                        <td>${audit.detalles || '-'}</td>
+                    </tr>
+                `;
+            });
+        }
+    } catch (error) {
+        alert('Error cargando auditoría: ' + error.message);
+    }
+});
+
+// Incidencias
+document.getElementById('btnCargarIncidencias').addEventListener('click', async () => {
+    try {
+        const response = await fetch('/api/reports/incidencias');
+        const data = await response.json();
+        
+        // Por estado
+        const estadoList = document.getElementById('incidencias-estado-list');
+        estadoList.innerHTML = '';
+        for (const [estado, cantidad] of Object.entries(data.incidencias_por_estado)) {
+            estadoList.innerHTML += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    ${estado}
+                    <span class="badge badge-primary badge-pill">${cantidad}</span>
+                </li>
+            `;
+        }
+        
+        // Por tipo
+        const tipoList = document.getElementById('incidencias-tipo-list');
+        tipoList.innerHTML = '';
+        for (const [tipo, cantidad] of Object.entries(data.incidencias_por_tipo)) {
+            tipoList.innerHTML += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    ${tipo}
+                    <span class="badge badge-warning badge-pill">${cantidad}</span>
+                </li>
+            `;
+        }
+        
+        document.getElementById('total-incidencias').textContent = data.total_incidencias;
+        document.getElementById('resultadoIncidencias').style.display = 'block';
+    } catch (error) {
+        alert('Error cargando reporte de incidencias: ' + error.message);
+    }
+});
+
+// Cargar estadísticas al inicio
+cargarEstadisticas();
+
+// Establecer fechas por defecto (último mes)
+const hoy = new Date();
+const haceUnMes = new Date();
+haceUnMes.setMonth(haceUnMes.getMonth() - 1);
+
+document.getElementById('uso-fecha-inicio').value = haceUnMes.toISOString().split('T')[0];
+document.getElementById('uso-fecha-fin').value = hoy.toISOString().split('T')[0];
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</main>
+</div>
+</div>
+</body>
+</html>

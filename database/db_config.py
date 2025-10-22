@@ -12,11 +12,18 @@ load_dotenv()
 # Configuración de la base de datos
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql://postgres:password@localhost:5432/reservas_udp"
+    "postgresql://postgres:xd@localhost:5432/reservas_udp"
 )
 
-# Crear engine de SQLAlchemy
-engine = create_engine(DATABASE_URL)
+# Crear engine de SQLAlchemy con configuración de encoding
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={
+        "client_encoding": "utf8",
+        "options": "-c client_encoding=utf8"
+    },
+    pool_pre_ping=True
+)
 
 # Crear sesión
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

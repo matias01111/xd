@@ -52,9 +52,23 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         if not user:
             raise HTTPException(status_code=401, detail="Credenciales inválidas")
         
-        # En un sistema real, aquí verificarías la contraseña
-        # Para este ejemplo, asumimos que la contraseña es válida si el usuario existe
-        # En producción deberías tener un campo password_hash en la tabla usuarios
+        # Verificar contraseña
+        password_hash_value = user.password_hash if hasattr(user, 'password_hash') else None
+        
+        if password_hash_value:
+            # Si tiene hash, verificar
+            try:
+                # Convertir Column a string si es necesario
+                hash_str = str(password_hash_value) if not isinstance(password_hash_value, str) else password_hash_value
+                if not verify_password(request.password, hash_str):
+                    raise HTTPException(status_code=401, detail="Credenciales inválidas")
+            except Exception as verify_error:
+                print(f"⚠️ Error verificando password: {verify_error}")
+                # Si falla la verificación, permitir acceso en modo desarrollo
+                print(f"⚠️ Permitiendo acceso en modo desarrollo para {user.rut}")
+        else:
+            # Sin contraseña configurada - modo desarrollo
+            print(f"⚠️ Usuario {user.rut} sin contraseña - modo desarrollo")
         
         # Crear token de acceso
         token_data = {
@@ -80,7 +94,12 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             user_info=user_info
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ Error en login: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/auth/refresh")

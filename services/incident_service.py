@@ -17,8 +17,12 @@ import uvicorn
 from database.db_config import get_db, init_db
 from database.models import Incidencia, Espacio, Usuario, Reserva, Notificacion, Auditoria
 from services.common.soa_protocol import SOAProtocol
+import requests
 
 app = FastAPI(title="Servicio de Incidencias - INCID")
+
+# URL del servicio de notificaciones
+NOTIFICATION_SERVICE = "http://localhost:5008"
 
 # Inicializar base de datos
 init_db()
@@ -64,6 +68,25 @@ def log_audit(db: Session, tabla: str, accion: str, id_registro: int, datos_ante
     db.add(audit)
     db.commit()
 
+def send_notification_async(tipo: str, reserva_id: int, usuario_id: int):
+    """Enviar notificación al servicio de notificaciones"""
+    try:
+        response = requests.post(
+            f"{NOTIFICATION_SERVICE}/notifications/send",
+            json={
+                "tipo": tipo,
+                "reserva_id": reserva_id,
+                "usuario_id": usuario_id
+            },
+            timeout=5
+        )
+        if response.status_code == 200:
+            print(f"Notificación '{tipo}' enviada para reserva #{reserva_id}")
+        else:
+            print(f"Error al enviar notificación: {response.status_code}")
+    except Exception as e:
+        print(f"Error al conectar con servicio de notificaciones: {e}")
+
 def create_notification(db: Session, tipo: str, email_destinatario: str, asunto: str, contenido: str, id_reserva: int = None):
     """Crear notificación"""
     notif = Notificacion(
@@ -80,6 +103,8 @@ def create_notification(db: Session, tipo: str, email_destinatario: str, asunto:
 async def report_incident(incident_data: IncidenciaCreate, db: Session = Depends(get_db)):
     """Reportar incidencia"""
     try:
+        print(f"Reportando incidencia: {incident_data}")
+        
         # Verificar que el espacio y usuario existen
         espacio = db.query(Espacio).filter(Espacio.id_espacio == incident_data.id_espacio).first()
         if not espacio:
@@ -88,6 +113,8 @@ async def report_incident(incident_data: IncidenciaCreate, db: Session = Depends
         usuario = db.query(Usuario).filter(Usuario.id_usuario == incident_data.id_usuario_reporta).first()
         if not usuario:
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        
+        print(f"Espacio: {espacio.nombre}, Usuario: {usuario.nombre}")
         
         # Crear incidencia
         new_incident = Incidencia(
@@ -102,13 +129,18 @@ async def report_incident(incident_data: IncidenciaCreate, db: Session = Depends
         db.commit()
         db.refresh(new_incident)
         
+        print(f"Incidencia creada con ID: {new_incident.id_incidencia}")
+        
         # Registrar en auditoría
-        log_audit(db, "incidencias", "crear", new_incident.id_incidencia, {}, {
-            "id_espacio": incident_data.id_espacio,
-            "tipo_incidencia": incident_data.tipo_incidencia,
-            "descripcion": incident_data.descripcion,
-            "estado": "abierta"
-        }, incident_data.id_usuario_reporta)
+        try:
+            log_audit(db, "incidencias", "crear", new_incident.id_incidencia, {}, {
+                "id_espacio": incident_data.id_espacio,
+                "tipo_incidencia": incident_data.tipo_incidencia,
+                "descripcion": incident_data.descripcion,
+                "estado": "abierta"
+            }, incident_data.id_usuario_reporta)
+        except Exception as audit_error:
+            print(f"Error en auditoría (no crítico): {str(audit_error)}")
         
         return IncidenciaResponse(
             id=new_incident.id_incidencia,
@@ -121,30 +153,42 @@ async def report_incident(incident_data: IncidenciaCreate, db: Session = Depends
             usuario_reporta_nombre=usuario.nombre
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
+        print(f"Error reportando incidencia: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/incidents", response_model=List[IncidenciaResponse])
 async def get_incidents(db: Session = Depends(get_db)):
     """Obtener todas las incidencias"""
     try:
-        incidents = db.query(Incidencia).join(Espacio).join(Usuario).all()
+        incidents = db.query(Incidencia).order_by(Incidencia.fecha_reporte.desc()).all()
         
-        return [
-            IncidenciaResponse(
+        result = []
+        for incident in incidents:
+            espacio = db.query(Espacio).filter(Espacio.id_espacio == incident.id_espacio).first()
+            usuario = db.query(Usuario).filter(Usuario.id_usuario == incident.id_usuario_reporta).first()
+            
+            result.append(IncidenciaResponse(
                 id=incident.id_incidencia,
                 id_espacio=incident.id_espacio,
                 tipo_incidencia=incident.tipo_incidencia,
                 descripcion=incident.descripcion,
                 estado=incident.estado,
                 fecha_reporte=incident.fecha_reporte,
-                espacio_nombre=incident.espacio.nombre,
-                usuario_reporta_nombre=incident.usuario_reporta.nombre
-            )
-            for incident in incidents
-        ]
+                espacio_nombre=espacio.nombre if espacio else "Desconocido",
+                usuario_reporta_nombre=usuario.nombre if usuario else "Desconocido"
+            ))
+        
+        return result
     except Exception as e:
+        print(f"Error obteniendo incidencias: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/incidents/block")
@@ -192,14 +236,8 @@ async def apply_block(request: BloqueoRequest, db: Session = Depends(get_db)):
             reserva.estado = 'cancelada'
             reserva.motivo = f"Cancelada por bloqueo por incidencia ID: {request.id_incidencia}"
             
-            # Notificar cancelación
-            create_notification(
-                db, "reserva_cancelada", 
-                reserva.usuario.correo_institucional,
-                "Reserva Cancelada por Incidencia",
-                f"Su reserva para {reserva.espacio.nombre} ha sido cancelada debido a una incidencia reportada.",
-                reserva.id_reserva
-            )
+            # Enviar notificación de cancelación por bloqueo
+            send_notification_async("bloqueo", reserva.id_reserva, reserva.id_usuario)
             reservas_canceladas += 1
         
         db.commit()
