@@ -11,6 +11,8 @@ const axios = require('axios');
 const moment = require('moment');
 
 const app = express();
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
 // Configuración
@@ -170,30 +172,57 @@ app.post('/disponibilidad', requireAuth, async (req, res) => {
 });
 
 app.post('/reservar', requireAuth, async (req, res) => {
-    try {
-        const { id_espacio, fecha_inicio, fecha_fin, motivo } = req.body;
-        
-        console.log('Datos recibidos en /reservar:', req.body);
-        
-        const bookingData = {
-            id_usuario: req.user.id,
-            id_espacio: parseInt(id_espacio),
-            fecha_inicio: fecha_inicio,
-            fecha_fin: fecha_fin,
-            motivo: motivo || "Reserva de espacio"
-        };
-        
-        console.log('Datos a enviar al servicio:', bookingData);
-        
-        const response = await axios.post(`${SERVICES.book}/bookings/create`, bookingData);
-        
-        res.redirect('/dashboard?success=Reserva creada exitosamente');
-    } catch (error) {
-        console.error('Error creando reserva:', error.message);
-        console.error('Response data:', error.response?.data);
-        res.redirect('/dashboard?error=Error al crear reserva');
+  try {
+    // 1) user y token desde la sesión
+    const user = req.session?.user;
+    const token = req.session?.token;
+
+    if (!user || !token) {
+      console.error('[RESERVAR] No hay sesión/tokén');
+      return res.redirect('/login');
     }
+
+    const { id_espacio, space_id, fecha_inicio, inicio, fecha_fin, fin, motivo } = req.body;
+
+    const bookingData = {
+      id_usuario: Number(user.id),
+      id_espacio: Number(id_espacio ?? space_id),
+      fecha_inicio: (fecha_inicio ?? inicio),
+      fecha_fin: (fecha_fin ?? fin),
+      motivo: motivo || null
+    };
+
+    if (!bookingData.id_espacio || !bookingData.fecha_inicio || !bookingData.fecha_fin) {
+      console.error('[RESERVAR] payload incompleto:', bookingData);
+      return res.render('disponibilidad', {
+        title: 'Consultar Disponibilidad',
+        results: req.session.lastResults || [],
+        searchParams: req.session.lastSearch || {},
+        error: 'Faltan datos para reservar (espacio/fechas).'
+      });
+    }
+
+    console.log('[RESERVAR] → 5005/bookings/create', bookingData);
+
+    const response = await axios.post(`${SERVICES.book}/bookings/create`, bookingData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    console.log('[RESERVAR] ←', response.status, response.data);
+
+    return res.redirect('/panel');
+  } catch (err) {
+    const msg = err?.response?.data?.error || err?.response?.data || err.message;
+    console.error('[RESERVAR] error:', msg);
+    return res.render('disponibilidad', {
+      title: 'Consultar Disponibilidad',
+      results: req.session.lastResults || [],
+      searchParams: req.session.lastSearch || {},
+      error: `No se pudo crear la reserva: ${msg}`
+    });
+  }
 });
+
 
 app.post('/cancelar-reserva', requireAuth, async (req, res) => {
     try {
